@@ -1,0 +1,102 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Creative Budget Planner</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f7fb;color:#18202a;font-family:Arial,sans-serif}.app{max-width:1500px;margin:auto;padding:30px 24px}.head{display:flex;justify-content:space-between;align-items:end;margin-bottom:22px}.k{font-size:11px;font-weight:bold;letter-spacing:2px;color:#2b6cb0}.head h1{margin:7px 0 4px;font-size:31px}.sub{margin:0;color:#7a8593;font-size:14px}.btn{padding:11px 15px;border:1px solid #e1e6ed;border-radius:10px;background:white;font-weight:bold;cursor:pointer}.primary{background:#173f78;color:white;border-color:#173f78}.grid{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:20px}.card{background:white;border:1px solid #e3e8ef;border-radius:18px;box-shadow:0 10px 30px #18202a0b;overflow:hidden}.top{padding:20px 21px 12px;display:flex;justify-content:space-between}.title{font-size:17px;font-weight:bold}.desc{font-size:12px;color:#7a8593;margin-top:4px}.table{overflow:auto;padding:0 12px 10px}table{width:100%;min-width:1300px;border-collapse:separate;border-spacing:0 7px}th{font-size:10px;color:#7a8593;text-transform:uppercase;text-align:left;padding:0 5px 4px;white-space:nowrap}td{padding:0 4px}input,select{width:100%;padding:9px 8px;border:1px solid #dfe5ec;border-radius:8px;background:#fbfcfe;font-size:12px;outline:none}input:focus,select:focus{border-color:#8ca9ce}.num{text-align:right}.months{text-align:center;background:#f1f4f8;font-weight:bold}.totalcell{text-align:right;font-weight:bold;white-space:nowrap}.del{width:31px;height:31px;padding:0;color:#999}.add{margin:3px 21px 20px;width:calc(100% - 42px);background:#eff4f9;color:#173f78;border:1px dashed #b5c6dc}.summary{padding:21px}.label{color:#7a8593;font-size:13px}.grand{font-size:32px;font-weight:850;margin:5px 0 18px;word-break:break-word}.stats{display:grid;grid-template-columns:1fr 1fr;gap:9px}.stat{padding:12px;background:#f7f9fc;border-radius:11px}.stat span{display:block;color:#7a8593;font-size:10px;margin-bottom:4px}.stat b{font-size:14px}.section{font-size:13px;font-weight:bold;margin:21px 0 9px}.recap{width:100%;border-collapse:collapse}.recap td{padding:6px 0;border-bottom:1px solid #edf0f4;font-size:11px}.recap td:last-child{text-align:right;font-weight:bold}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px}.chart{text-align:center;margin-top:8px}.legend{text-align:left}.leg{display:flex;gap:7px;padding:5px 0;font-size:11px}.leg span:nth-child(2){flex:1}.empty{color:#7a8593;font-size:11px;padding:12px 0}@media(max-width:1000px){.grid{grid-template-columns:1fr}}@media(max-width:650px){.head{align-items:flex-start;flex-direction:column;gap:14px}}
+</style></head><body><div class="app">
+<header class="head"><div><div class="k">CREATIVE BUDGET PLANNER</div><h1>Budget Creative</h1><p class="sub">Kelola kontrak, biaya creative, PPN, prioritas, dan alokasi budget.</p></div><button class="btn" onclick="downloadExcel()">↓ Download Excel</button>
+<button class="btn primary" onclick="add()">＋ Tambah Item</button></header>
+<div class="grid"><section class="card"><div class="top"><div><div class="title">Daftar Budget</div><div class="desc">Perhitungan bulan, PPN, dan totalan otomatis.</div></div><div class="desc" id="count"></div></div>
+<div class="table"><table><thead><tr><th>Item</th><th>Kategori</th><th>Priority</th><th>Awal Kontrak</th><th>Akhir Kontrak</th><th>Bulan</th><th>Harga Belum PPN</th><th>Biaya Lainnya</th><th>PPN</th><th>Totalan</th><th></th></tr></thead><tbody id="rows"></tbody></table></div><button class="btn add" id="addBtn" onclick="add()">＋ Tambah Item</button></section>
+<aside class="card summary"><div class="label">Besaran Totalan Budget Overall</div><div class="grand" id="grand">Rp 0</div><div class="stats"><div class="stat"><span>Harga Belum PPN</span><b id="sub">Rp 0</b></div><div class="stat"><span>Biaya Lainnya</span><b id="extra">Rp 0</b></div><div class="stat"><span>Total PPN</span><b id="ppn">Rp 0</b></div><div class="stat"><span>Jumlah Item</span><b id="items">0</b></div></div>
+<div class="section">Rekapitulasi per Kategori</div><table class="recap" id="recap"></table><div class="section">Alokasi Budget</div><div class="chart"><canvas id="chart" width="300" height="300"></canvas><div class="legend" id="legend"></div></div>
+</aside></div></div>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+function downloadExcel(){
+  const rows = data.map((x,i) => ({
+    "No": i+1,
+    "Item": x.item || "",
+    "Kategori": x.cat || "",
+    "Priority": x.priority || "",
+    "Periode Awal Kontrak": x.start || "",
+    "Periode Akhir Kontrak": x.end || "",
+    "Total Kontrak (Bulan)": monthDiff(x.start,x.end),
+    "Harga Belum PPN": Number(x.price||0),
+    "Biaya Lainnya": Number(x.other||0),
+    "PPN (%)": Number(x.tax||0)/100,
+    "Nilai PPN": (Number(x.price||0)+Number(x.other||0))*(Number(x.tax||0)/100),
+    "Totalan": rowTotal(x)
+  })).filter(r => r.Item || r["Harga Belum PPN"] || r["Biaya Lainnya"]);
+
+  if(!rows.length){
+    alert("Belum ada data budget untuk di-download.");
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+
+  // Summary section
+  const subtotal = rows.reduce((s,r)=>s+r["Harga Belum PPN"],0);
+  const extras = rows.reduce((s,r)=>s+r["Biaya Lainnya"],0);
+  const ppn = rows.reduce((s,r)=>s+r["Nilai PPN"],0);
+  const total = rows.reduce((s,r)=>s+r["Totalan"],0);
+
+  XLSX.utils.sheet_add_aoa(ws, [
+    [],
+    ["RINGKASAN BUDGET"],
+    ["Subtotal Harga Belum PPN", subtotal],
+    ["Biaya Lainnya", extras],
+    ["Total PPN", ppn],
+    ["TOTAL BUDGET", total]
+  ], {origin:-1});
+
+  ws["!cols"] = [
+    {wch:6},{wch:28},{wch:22},{wch:12},{wch:18},{wch:18},
+    {wch:20},{wch:20},{wch:18},{wch:11},{wch:18},{wch:20}
+  ];
+
+  // Format currency and percent cells in the main table.
+  for(let r=2;r<=rows.length+1;r++){
+    [8,9,11,12].forEach(c=>{
+      const cell=ws[XLSX.utils.encode_cell({r:r-1,c:c-1})];
+      if(cell) cell.z='"Rp" #,##0';
+    });
+    const taxCell=ws[XLSX.utils.encode_cell({r:r-1,c:10-1})];
+    if(taxCell) taxCell.z='0%';
+  }
+
+  XLSX.utils.book_append_sheet(wb, ws, "Budget Creative");
+
+  // Category recap sheet
+  const cats = CATEGORIES || [];
+  const recap = cats.map(cat => {
+    const value = rows.filter(r=>r.Kategori===cat).reduce((s,r)=>s+r.Totalan,0);
+    return {"Kategori":cat,"Total Budget":value};
+  }).filter(r=>r["Total Budget"]>0);
+  const recapWs = XLSX.utils.json_to_sheet(recap.length ? recap : [{"Kategori":"Belum ada data","Total Budget":0}]);
+  recapWs["!cols"]=[{wch:25},{wch:22}];
+  recap.forEach((_,i)=>{
+    const cell=recapWs[XLSX.utils.encode_cell({r:i,c:1})];
+    if(cell) cell.z='"Rp" #,##0';
+  });
+  XLSX.utils.book_append_sheet(wb, recapWs, "Rekap Kategori");
+
+  const stamp = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `creative_budget_${stamp}.xlsx`);
+}
+</script>
+<script>
+const cats=["freelancer","sworn translator","vendor","tvc","launching produk","kalender","website","unconditional cost","production"], pri=["Urgent","High","Medium","Low"], colors=["#173f78","#2b6cb0","#4d82bd","#6e9bc5","#8bb0d1","#a9c4dc","#c1d4e5","#d8e4ef","#e6edf4"],MAX=100;
+let d=Array.from({length:8},()=>({item:"",cat:"freelancer",priority:"Medium",start:"",end:"",price:0,other:0,tax:11}));
+const money=n=>new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR",maximumFractionDigits:0}).format(n||0);
+const esc=s=>String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+function months(a,b){if(!a||!b)return 0;let s=new Date(a+"T00:00:00"),e=new Date(b+"T00:00:00");if(e<s)return 0;return (e.getFullYear()-s.getFullYear())*12+e.getMonth()-s.getMonth()+1}
+function total(x){return x.price+x.other+(x.price+x.other)*x.tax/100}
+const monthDiff=months; const rowTotal=total;
+function render(){rows.innerHTML=d.map((x,i)=>`<tr><td><input placeholder="Nama item" value="${esc(x.item)}" oninput="d[${i}].item=this.value;update()"></td><td><select onchange="d[${i}].cat=this.value;update()">${cats.map(c=>`<option ${c==x.cat?"selected":""}>${c}</option>`).join("")}</select></td><td><select onchange="d[${i}].priority=this.value;update()">${pri.map(p=>`<option ${p==x.priority?"selected":""}>${p}</option>`).join("")}</select></td><td><input type="date" value="${x.start}" onchange="d[${i}].start=this.value;update()"></td><td><input type="date" min="${x.start}" value="${x.end}" onchange="d[${i}].end=this.value;update()"></td><td><input class="months" readonly value="${months(x.start,x.end)||""}"></td><td><input class="num" type="number" min="0" value="${x.price||""}" placeholder="0" oninput="d[${i}].price=+this.value||0;update()"></td><td><input class="num" type="number" min="0" value="${x.other||""}" placeholder="0" oninput="d[${i}].other=+this.value||0;update()"></td><td><input class="num" type="number" min="0" value="${x.tax}" oninput="d[${i}].tax=+this.value||0;update()"></td><td class="totalcell">${money(total(x))}</td><td><button class="del btn" onclick="remove(${i})">×</button></td></tr>`).join("");count.textContent=d.filter(x=>x.item||x.price||x.other).length+" item";addBtn.disabled=d.length>=MAX;update()}
+function add(){if(d.length<MAX){d.push({item:"",cat:"production",priority:"Medium",start:"",end:"",price:0,other:0,tax:11});render()}}
+function remove(i){d.splice(i,1);if(!d.length)d.push({item:"",cat:"production",priority:"Medium",start:"",end:"",price:0,other:0,tax:11});render()}
+function update(){let sub=0,other=0,tax=0,grand=0,n=0;d.forEach(x=>{sub+=x.price;other+=x.other;tax+=(x.price+x.other)*x.tax/100;grand+=total(x);if(x.item||x.price||x.other)n++});document.getElementById("sub").textContent=money(sub);document.getElementById("extra").textContent=money(other);document.getElementById("ppn").textContent=money(tax);document.getElementById("grand").textContent=money(grand);document.getElementById("items").textContent=n;draw()}
+function draw(){let sums={};cats.forEach(c=>sums[c]=0);d.forEach(x=>sums[x.cat]+=total(x));let vals=cats.map((c,i)=>({c,v:sums[c],i})).filter(x=>x.v>0),sum=vals.reduce((a,x)=>a+x.v,0),ctx=chart.getContext("2d");ctx.clearRect(0,0,300,300);if(!sum){ctx.beginPath();ctx.arc(150,150,92,0,7);ctx.strokeStyle="#e9edf2";ctx.lineWidth=30;ctx.stroke();ctx.fillStyle="#7a8593";ctx.textAlign="center";ctx.font="600 13px Arial";ctx.fillText("Belum ada data",150,155);legend.innerHTML='<div class="empty">Masukkan budget untuk melihat proporsi.</div>';recap.innerHTML='<tr><td colspan="2" class="empty">Belum ada budget.</td></tr>';return}let a=-Math.PI/2;vals.forEach((x,i)=>{let b=a+x.v/sum*Math.PI*2;ctx.beginPath();ctx.arc(150,150,92,a,b);ctx.strokeStyle=colors[i%colors.length];ctx.lineWidth=30;ctx.stroke();a=b});ctx.fillStyle="#18202a";ctx.textAlign="center";ctx.font="800 13px Arial";ctx.fillText(money(sum),150,153);ctx.fillStyle="#7a8593";ctx.font="10px Arial";ctx.fillText("TOTAL",150,171);legend.innerHTML=vals.map((x,i)=>`<div class="leg"><span class="dot" style="background:${colors[i%colors.length]}"></span><span>${x.c}</span><b>${Math.round(x.v/sum*100)}%</b></div>`).join("");recap.innerHTML=vals.map((x,i)=>`<tr><td><span class="dot" style="background:${colors[i%colors.length]}"></span>${x.c}</td><td>${money(x.v)}</td></tr>`).join("")}
+render();
+</script></body></html>
