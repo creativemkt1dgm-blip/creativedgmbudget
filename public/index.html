@@ -4,9 +4,9 @@
 </style></head><body><div class="app">
 <header class="head"><div><div class="k">CREATIVE BUDGET PLANNER</div><h1>Budget Creative</h1><p class="sub">Kelola kontrak, biaya creative, PPN, prioritas, dan alokasi budget.</p><div class="desc" id="saveState">Memuat data…</div></div><div><button class="btn" onclick="downloadExcel()">↓ Download Excel</button>
 <button class="btn primary" onclick="add()">＋ Tambah Item</button></div></header>
-<div class="grid"><section class="card"><div class="top"><div><div class="title">Daftar Budget</div><div class="desc">Perhitungan bulan, PPN, dan totalan otomatis.</div></div><div class="desc" id="count"></div></div>
-<div class="table"><table><thead><tr><th>Item</th><th>Kategori</th><th>Priority</th><th>Awal Kontrak</th><th>Akhir Kontrak</th><th>Bulan</th><th>Harga Belum PPN</th><th>Biaya Lainnya</th><th>PPN</th><th>Totalan</th><th></th></tr></thead><tbody id="rows"></tbody></table></div><button class="btn add" id="addBtn" onclick="add()">＋ Tambah Item</button></section>
-<aside class="card summary"><div class="label">Besaran Totalan Budget Overall</div><div class="grand" id="grand">Rp 0</div><div class="stats"><div class="stat"><span>Harga Belum PPN</span><b id="sub">Rp 0</b></div><div class="stat"><span>Biaya Lainnya</span><b id="extra">Rp 0</b></div><div class="stat"><span>Total PPN</span><b id="ppn">Rp 0</b></div><div class="stat"><span>Jumlah Item</span><b id="items">0</b></div></div>
+<div class="grid"><section class="card"><div class="top"><div><div class="title">Daftar Budget</div><div class="desc">Harga diisi per bulan — totalan otomatis dikali jumlah bulan kontrak + PPN.</div></div><div class="desc" id="count"></div></div>
+<div class="table"><table><thead><tr><th>Item</th><th>Kategori</th><th>Priority</th><th>Awal Kontrak</th><th>Akhir Kontrak</th><th>Bulan</th><th>Harga / Bulan (Belum PPN)</th><th>Biaya Lainnya / Bulan</th><th>PPN</th><th>Totalan (× Bulan)</th><th></th></tr></thead><tbody id="rows"></tbody></table></div><button class="btn add" id="addBtn" onclick="add()">＋ Tambah Item</button></section>
+<aside class="card summary"><div class="label">Besaran Totalan Budget Overall</div><div class="grand" id="grand">Rp 0</div><div class="stats"><div class="stat"><span>Harga Belum PPN (× Bulan)</span><b id="sub">Rp 0</b></div><div class="stat"><span>Biaya Lainnya (× Bulan)</span><b id="extra">Rp 0</b></div><div class="stat"><span>Total PPN</span><b id="ppn">Rp 0</b></div><div class="stat"><span>Jumlah Item</span><b id="items">0</b></div></div>
 <div class="section">Rekapitulasi per Kategori</div><table class="recap" id="recap"></table><div class="section">Alokasi Budget</div><div class="chart"><canvas id="chart" width="300" height="300"></canvas><div class="legend" id="legend"></div></div>
 </aside></div></div>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -20,12 +20,12 @@ function downloadExcel(){
     "Periode Awal Kontrak": x.start || "",
     "Periode Akhir Kontrak": x.end || "",
     "Total Kontrak (Bulan)": monthDiff(x.start,x.end),
-    "Harga Belum PPN": Number(x.price||0),
-    "Biaya Lainnya": Number(x.other||0),
+    "Harga Belum PPN / Bulan": Number(x.price||0),
+    "Biaya Lainnya / Bulan": Number(x.other||0),
     "PPN (%)": Number(x.tax||0)/100,
-    "Nilai PPN": (Number(x.price||0)+Number(x.other||0))*(Number(x.tax||0)/100),
+    "Nilai PPN": (Number(x.price||0)+Number(x.other||0))*(Number(x.tax||0)/100)*mult(x),
     "Totalan": rowTotal(x)
-  })).filter(r => r.Item || r["Harga Belum PPN"] || r["Biaya Lainnya"]);
+  })).filter(r => r.Item || r["Harga Belum PPN / Bulan"] || r["Biaya Lainnya / Bulan"]);
 
   if(!rows.length){
     alert("Belum ada data budget untuk di-download.");
@@ -36,16 +36,17 @@ function downloadExcel(){
   const ws = XLSX.utils.json_to_sheet(rows);
 
   // Summary section
-  const subtotal = rows.reduce((s,r)=>s+r["Harga Belum PPN"],0);
-  const extras = rows.reduce((s,r)=>s+r["Biaya Lainnya"],0);
+  const m = r => r["Total Kontrak (Bulan)"] || 1;
+  const subtotal = rows.reduce((s,r)=>s+r["Harga Belum PPN / Bulan"]*m(r),0);
+  const extras = rows.reduce((s,r)=>s+r["Biaya Lainnya / Bulan"]*m(r),0);
   const ppn = rows.reduce((s,r)=>s+r["Nilai PPN"],0);
   const total = rows.reduce((s,r)=>s+r["Totalan"],0);
 
   XLSX.utils.sheet_add_aoa(ws, [
     [],
     ["RINGKASAN BUDGET"],
-    ["Subtotal Harga Belum PPN", subtotal],
-    ["Biaya Lainnya", extras],
+    ["Subtotal Harga Belum PPN (× Bulan)", subtotal],
+    ["Biaya Lainnya (× Bulan)", extras],
     ["Total PPN", ppn],
     ["TOTAL BUDGET", total]
   ], {origin:-1});
@@ -91,7 +92,9 @@ let d=[];
 const money=n=>new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR",maximumFractionDigits:0}).format(n||0);
 const esc=s=>String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 function months(a,b){if(!a||!b)return 0;let s=new Date(a+"T00:00:00"),e=new Date(b+"T00:00:00");if(e<s)return 0;return (e.getFullYear()-s.getFullYear())*12+e.getMonth()-s.getMonth()+1}
-function total(x){return x.price+x.other+(x.price+x.other)*x.tax/100}
+// Harga & biaya lainnya diisi per bulan; totalan dikali jumlah bulan kontrak (1 jika tanggal belum diisi).
+function mult(x){return months(x.start,x.end)||1}
+function total(x){return (x.price+x.other+(x.price+x.other)*x.tax/100)*mult(x)}
 const monthDiff=months; const rowTotal=total;
 
 // --- Penyimpanan online (Netlify Database) ---
@@ -106,7 +109,7 @@ window.addEventListener("beforeunload",()=>Object.keys(timers).forEach(id=>{clea
 function render(){rows.innerHTML=d.map((x,i)=>`<tr><td><input placeholder="Nama item" value="${esc(x.item)}" oninput="set(${i},'item',this.value)"></td><td><select onchange="set(${i},'cat',this.value)">${cats.map(c=>`<option ${c==x.cat?"selected":""}>${c}</option>`).join("")}</select></td><td><select onchange="set(${i},'priority',this.value)">${pri.map(p=>`<option ${p==x.priority?"selected":""}>${p}</option>`).join("")}</select></td><td><input type="date" value="${x.start}" onchange="set(${i},'start',this.value,true)"></td><td><input type="date" min="${x.start}" value="${x.end}" onchange="set(${i},'end',this.value,true)"></td><td><input class="months" readonly value="${months(x.start,x.end)||""}"></td><td><input class="num" type="number" min="0" value="${x.price||""}" placeholder="0" oninput="set(${i},'price',+this.value||0)"></td><td><input class="num" type="number" min="0" value="${x.other||""}" placeholder="0" oninput="set(${i},'other',+this.value||0)"></td><td><input class="num" type="number" min="0" value="${x.tax}" oninput="set(${i},'tax',+this.value||0)"></td><td class="totalcell" id="t${i}">${money(total(x))}</td><td><button class="del btn" onclick="remove(${i})">×</button></td></tr>`).join("");addBtn.disabled=d.length>=MAX;update()}
 async function add(){if(d.length>=MAX)return;addBtn.disabled=true;try{d.push(await api("POST","",{cat:"production",priority:"Medium",tax:11}));render()}catch(e){alert("Gagal menambah item. Coba lagi.");addBtn.disabled=false}}
 async function remove(i){const x=d[i];if((x.item||x.price||x.other)&&!confirm(`Hapus item "${x.item||"tanpa nama"}"?`))return;clearTimeout(timers[x.id]);delete pending[x.id];try{await api("DELETE","/"+x.id);d.splice(i,1);if(!d.length)return add();render()}catch(e){alert("Gagal menghapus item. Coba lagi.")}}
-function update(){let sub=0,other=0,tax=0,grand=0,n=0;d.forEach((x,i)=>{sub+=x.price;other+=x.other;tax+=(x.price+x.other)*x.tax/100;grand+=total(x);if(x.item||x.price||x.other)n++;const t=document.getElementById("t"+i);if(t)t.textContent=money(total(x))});count.textContent=n+" item";document.getElementById("sub").textContent=money(sub);document.getElementById("extra").textContent=money(other);document.getElementById("ppn").textContent=money(tax);document.getElementById("grand").textContent=money(grand);document.getElementById("items").textContent=n;draw()}
+function update(){let sub=0,other=0,tax=0,grand=0,n=0;d.forEach((x,i)=>{const m=mult(x);sub+=x.price*m;other+=x.other*m;tax+=(x.price+x.other)*x.tax/100*m;grand+=total(x);if(x.item||x.price||x.other)n++;const t=document.getElementById("t"+i);if(t)t.textContent=money(total(x))});count.textContent=n+" item";document.getElementById("sub").textContent=money(sub);document.getElementById("extra").textContent=money(other);document.getElementById("ppn").textContent=money(tax);document.getElementById("grand").textContent=money(grand);document.getElementById("items").textContent=n;draw()}
 function draw(){let sums={};cats.forEach(c=>sums[c]=0);d.forEach(x=>sums[x.cat]+=total(x));let vals=cats.map((c,i)=>({c,v:sums[c],i})).filter(x=>x.v>0),sum=vals.reduce((a,x)=>a+x.v,0),ctx=chart.getContext("2d");ctx.clearRect(0,0,300,300);if(!sum){ctx.beginPath();ctx.arc(150,150,92,0,7);ctx.strokeStyle="#e9edf2";ctx.lineWidth=30;ctx.stroke();ctx.fillStyle="#7a8593";ctx.textAlign="center";ctx.font="600 13px Arial";ctx.fillText("Belum ada data",150,155);legend.innerHTML='<div class="empty">Masukkan budget untuk melihat proporsi.</div>';recap.innerHTML='<tr><td colspan="2" class="empty">Belum ada budget.</td></tr>';return}let a=-Math.PI/2;vals.forEach((x,i)=>{let b=a+x.v/sum*Math.PI*2;ctx.beginPath();ctx.arc(150,150,92,a,b);ctx.strokeStyle=colors[i%colors.length];ctx.lineWidth=30;ctx.stroke();a=b});ctx.fillStyle="#18202a";ctx.textAlign="center";ctx.font="800 13px Arial";ctx.fillText(money(sum),150,153);ctx.fillStyle="#7a8593";ctx.font="10px Arial";ctx.fillText("TOTAL",150,171);legend.innerHTML=vals.map((x,i)=>`<div class="leg"><span class="dot" style="background:${colors[i%colors.length]}"></span><span>${x.c}</span><b>${Math.round(x.v/sum*100)}%</b></div>`).join("");recap.innerHTML=vals.map((x,i)=>`<tr><td><span class="dot" style="background:${colors[i%colors.length]}"></span>${x.c}</td><td>${money(x.v)}</td></tr>`).join("")}
 async function load(){status("Memuat data…");try{const r=await fetch("/api/items");if(!r.ok)throw new Error(await r.text());d=await r.json();if(!d.length){await add();return}render();status("✓ Tersimpan online","#2f855a")}catch(e){console.error(e);status("⚠ Gagal memuat data dari database","#c53030")}}
 render();load();
